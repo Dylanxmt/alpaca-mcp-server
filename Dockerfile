@@ -18,7 +18,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 ENV PATH="/app/.venv/bin:$PATH"
 
-## Local: CMD ["alpaca-mcp-server", "serve"]
+## Local: CMD ["alpaca-mcp-server", "--transport", "stdio"]
 
-# Cloud deployment (HTTP transport for remote MCP access)
-CMD ["alpaca-mcp-server", "serve", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8000"]
+# Cloud deployment — uses $PORT env var (Render sets this automatically)
+ENV PORT=8000
+CMD sh -c "alpaca-mcp-server --transport streamable-http --host 0.0.0.0 --port ${PORT}"
