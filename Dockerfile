@@ -18,7 +18,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 ENV PATH="/app/.venv/bin:$PATH"
 
-CMD ["alpaca-mcp-server", "serve"]
+## Local: CMD ["alpaca-mcp-server", "serve"]
 
-# For cloud deployment
-# CMD ["alpaca-mcp-server", "serve", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8000"]
+# Cloud deployment (HTTP transport for remote MCP access)
+CMD ["alpaca-mcp-server", "serve", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8000"]
