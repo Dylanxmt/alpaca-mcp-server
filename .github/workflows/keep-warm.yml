@@ -1,0 +1,48 @@
+name: Keep Render instance warm
+
+# Pings the Render-hosted Alpaca MCP a few minutes before each scheduled
+# agent run so the instance is warm (not spun down from inactivity) when
+# the agent connects. Handles both EDT and EST by scheduling for both.
+#
+# Render free tier spins a service down after ~15 min of inactivity; a cold
+# start takes 30-60s which exceeds the MCP client's connect timeout and
+# causes the agent to report "Alpaca API unavailable" (observed 2026-04-17
+# midday). Six pings/day x 20 weekdays = 120 pings/mo, keeping the service
+# warm only around agent windows — well under the 750-hr monthly cap.
+
+on:
+  schedule:
+    # Times are UTC. GitHub Actions does not honor timezones.
+    # Agent windows: 9:00 AM, 12:00 PM, 3:55 PM ET.
+    # We ping ~2 min before each. Two entries per window cover EDT and EST.
+    - cron: '58 12 * * 1-5'   # 08:58 EDT  / pre-9 AM agent (EDT)
+    - cron: '58 13 * * 1-5'   # 08:58 EST  / pre-9 AM agent (EST)
+    - cron: '58 15 * * 1-5'   # 11:58 EDT  / pre-12 PM agent (EDT)
+    - cron: '58 16 * * 1-5'   # 11:58 EST  / pre-12 PM agent (EST)
+    - cron: '53 19 * * 1-5'   # 15:53 EDT  / pre-3:55 PM agent (EDT)
+    - cron: '53 20 * * 1-5'   # 15:53 EST  / pre-3:55 PM agent (EST)
+  workflow_dispatch:          # Allow manual ping for testing
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Warm the MCP endpoint
+        run: |
+          URL="https://alpaca-mcp-server-8zw5.onrender.com/mcp"
+          echo "Pinging $URL at $(date -u)"
+          # Retry up to 3 times; the first ping may cold-start and take up to 60s.
+          # Accept 4xx responses as "alive" — a plain GET on /mcp returns 406
+          # (expected, since MCP negotiates content-type). Any HTTP response
+          # proves the server is up, and the request itself warms it.
+          for i in 1 2 3; do
+            status=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 75 "$URL" || echo "000")
+            echo "Attempt $i: HTTP $status"
+            case "$status" in
+              2*|3*|4*) echo "Server is warm."; exit 0 ;;
+            esac
+            sleep 10
+          done
+          echo "Server did not respond after 3 attempts."
+          exit 1
